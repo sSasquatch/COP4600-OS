@@ -1,0 +1,127 @@
+const int buffersize = 5;
+semaphore full = 1, full2 = 5, full3 = 1, mutex = 1, mutex2 = 1, mutex3 = 1;
+semaphore ioreq, reqpend, reqserv, phyio, opcomplete, print = 1;
+int bid, baddr, iorq1[buffersize], iorq2[buffersize], daddr;
+
+void user(void) {
+	int i, id, addr;
+
+	for (i = 0; i < 5; i++) {
+		id = 1;
+		addr = random(20) + 1;
+		
+		p(print);
+		cout << "User-1 executes system call SIO and DOIO." << endl;
+		v(print);
+
+		p(full);
+		p(mutex);
+		bid = id;
+		baddr = addr;
+		v(mutex);
+		v(ioreq);
+
+		p(print);
+		cout << "User receives signal from user and resumes execution." << endl;
+		v(print);
+
+		p(reqserv);
+	}
+}
+
+void doio(void) {
+	int tid, taddr, k = 0, i;
+
+	for (i = 0; i < 5; i++) {
+		p(print);
+		cout << "DOIO assembles IORB for user-1." << endl;
+		v(print);
+
+		p(ioreq);
+		p(mutex);
+		tid = bid;
+		taddr = baddr;
+		v(mutex);
+		v(full);
+
+		p(print);
+		cout << "DOIO inserts user-1 IORB in IORQ." << endl;
+		v(print);
+
+		p(full2);
+		p(mutex2);
+		iorq1[k] = tid;
+		iorq2[k] = taddr;
+		k++;
+		if (k == buffersize)
+			k = 0;
+		v(mutex2);
+		v(reqpend);
+	}
+}
+
+void driver(void) {
+	int m = 0, t2id, t2addr, i;
+
+	for (i = 0; i < 5; i++) {
+		p(print);
+		cout << "Driver gets user-1 IORB from IORQ." << endl;
+		v(print);
+
+		p(reqpend);
+		p(mutex2);
+		t2id = iorq1[m];
+		t2addr = iorq2[m];
+		m++;
+		if (m == buffersize)
+			m = 0;
+		v(mutex2);
+		v(full2);
+
+		p(print);
+		cout << "Driver initiates I/O operation for user-1 and waits." << endl;
+		v(print);
+	
+		p(full3);
+		p(mutex3);
+		daddr = t2addr;
+		v(mutex3);
+		v(phyio);
+
+		p(opcomplete);
+
+		p(print);
+		cout << "Driver receives signal operation complete from disk." << endl;
+		v(print);
+
+		p(print);
+		cout << "Driver signals user-1." << endl;
+		v(print);
+
+		v(reqserv);
+	}
+}
+
+void disk(void) {
+	int diaddr, i;
+
+	for (i = 0; i < 5; i++) {
+		p(phyio);
+		p(mutex3);
+		diaddr = daddr;
+		v(mutex3);
+		v(full3);
+
+		p(print);
+		cout << "Disk completes I/O operation." << endl;
+		v(print);
+	
+		v(opcomplete);
+	}
+}
+
+void main() {
+	cobegin {
+		user(); doio(); driver(); disk();
+	}
+}
